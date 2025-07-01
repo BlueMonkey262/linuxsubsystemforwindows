@@ -1,49 +1,45 @@
 import socket
 
-HOST = '0.0.0.0'
+HOST = '192.168.122.218'  # IP address of the Windows machine
 PORT = 9999
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind((HOST, PORT))
-    s.listen(1)
-    print(f"Waiting for Windows VM to connect on port {PORT}...")
+    s.connect((HOST, PORT))
 
-    conn, addr = s.accept()
-    with conn:
-        print(f"Connected by {addr}")
-        prompt = "LSW> "
+    # Receive the initial prompt
+    data = s.recv(4096)
+    if data:
+        prompt_line = data.decode().strip()
+        print(f"Connected to Windows server: {prompt_line}")
 
-        while True:
-            command = input(prompt)
-            if not command:
-                break
-            conn.sendall(command.encode())
+    while True:
+        # Get command from user with the current prompt
+        command = input(prompt_line + " ")
+        if not command:
+            break
 
-            result = conn.recv(4096).decode()
+        # Send command to the Windows server
+        s.sendall(command.encode())
 
-            # Split lines
-            lines = result.splitlines()
+        # Receive response
+        result = s.recv(4096).decode()
 
-            # Extract prompt line and rest of output
-            if lines:
-                prompt_line = lines[0]
-                output_lines = lines[1:]
-            else:
-                prompt_line = ""
-                output_lines = []
+        # Split lines
+        lines = result.splitlines()
 
-            # Remove duplicate echoed command if present
-            if output_lines and output_lines[0].strip().lower() == command.strip().lower():
-                output_lines = output_lines[1:]
+        # Extract prompt line and rest of output
+        if lines:
+            prompt_line = lines[0]
+            output_lines = lines[1:]
+        else:
+            prompt_line = ""
+            output_lines = []
 
-            # Reassemble output without duplicate command echo
+        # Remove duplicate echoed command if present
+        if output_lines and output_lines[0].strip().lower() == command.strip().lower():
+            output_lines = output_lines[1:]
+
+        # Print only the actual output, not the prompt again
+        if output_lines:
             output = "\n".join(output_lines)
-
-            # Modified: Only print the output, not the prompt line again
-            if output:
-                print(output)
-
-            # Update prompt to new prompt line (up to '> ')
-            if ">" in prompt_line:
-                prompt = prompt_line.split(">")[0] + "> "
+            print(output)

@@ -3,15 +3,17 @@ import subprocess
 import os
 import base64
 
-HOST = '192.168.50.39'
+HOST = '0.0.0.0'  # Listen on all available interfaces
 PORT = 9999
 
 mode = "ps"
 cwd = os.path.expanduser("C:\\Users\\Admin")  # default directory
 
+
 def encode_powershell_command(cmd: str) -> str:
     cmd_bytes = cmd.encode('utf-16le')
     return base64.b64encode(cmd_bytes).decode('ascii')
+
 
 def run_powershell_command(command: str, cwd: str) -> str:
     ps_command = (
@@ -27,6 +29,7 @@ def run_powershell_command(command: str, cwd: str) -> str:
         cwd=cwd
     )
     return output.strip()
+
 
 def get_prompt():
     global cwd
@@ -45,72 +48,84 @@ def get_prompt():
         except Exception:
             return f"{cwd}> "
 
+
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.connect((HOST, PORT))
+    s.bind((HOST, PORT))
+    s.listen(1)
+    print(f"Waiting for Linux client to connect on port {PORT}...")
 
-    while True:
-        data = s.recv(4096)
-        if not data:
-            break
-        command = data.decode().strip()
+    conn, addr = s.accept()
+    with conn:
+        print(f"Connected by {addr}")
 
-        if command == 'lsw ps':
-            mode = "ps"
-            s.sendall(b"[LSW] Switched to PowerShell mode.\n")
-            continue
-        elif command == 'lsw cmd':
-            mode = "cmd"
-            s.sendall(b"[LSW] Switched to CMD mode.\n")
-            continue
+        # Send initial prompt
+        prompt = get_prompt()
+        conn.sendall(prompt.encode())
 
-        try:
-            if command.lower().startswith("cd"):
-                parts = command.split(maxsplit=1)
-                if len(parts) == 2:
-                    new_path = parts[1].strip('"').replace("/", "\\")
-                    if new_path == "..":
-                        cwd = os.path.dirname(cwd)
-                    else:
-                        combined = os.path.abspath(os.path.join(cwd, new_path))
-                        if os.path.isdir(combined):
-                            cwd = combined
-                        else:
-                            raise FileNotFoundError(f"The system cannot find the path specified: {combined}")
-                prompt = get_prompt()
-                s.sendall(prompt.encode())
+        while True:
+            data = conn.recv(4096)
+            if not data:
+                break
+
+            command = data.decode().strip()
+
+            if command == 'lsw ps':
+                mode = "ps"
+                conn.sendall(f"{prompt}\n[LSW] Switched to PowerShell mode.".encode())
+                continue
+            elif command == 'lsw cmd':
+                mode = "cmd"
+                conn.sendall(f"{prompt}\n[LSW] Switched to CMD mode.".encode())
                 continue
 
-            if mode == "ps":
-                output = run_powershell_command(command, cwd)
-            else:
-                output = subprocess.check_output(
-                    command,
-                    shell=True,
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    cwd=cwd
-                ).strip()
+            try:
+                if command.lower().startswith("cd"):
+                    parts = command.split(maxsplit=1)
+                    if len(parts) == 2:
+                        new_path = parts[1].strip('"').replace("/", "\\")
+                        if new_path == "..":
+                            cwd = os.path.dirname(cwd)
+                        else:
+                            combined = os.path.abspath(os.path.join(cwd, new_path))
+                            if os.path.isdir(combined):
+                                cwd = combined
+                            else:
+                                raise FileNotFoundError(f"The system cannot find the path specified: {combined}")
+                    prompt = get_prompt()
+                    conn.sendall(prompt.encode())
+                    continue
 
-            prompt = get_prompt()
+                if mode == "ps":
+                    output = run_powershell_command(command, cwd)
+                else:
+                    output = subprocess.check_output(
+                        command,
+                        shell=True,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        cwd=cwd
+                    ).strip()
 
-            # Remove duplicate prompt from output start, if present
-            if output.startswith(prompt):
-                output = output[len(prompt):].lstrip("\r\n")
+                prompt = get_prompt()
 
-            # Send only the current prompt and actual output
-            # The Linux side will now display only the output portion
-            full_output = f"{prompt}\n{output}"
+                # Remove duplicate prompt from output start, if present
+                if output.startswith(prompt):
+                    output = output[len(prompt):].lstrip("\r\n")
 
-        except subprocess.CalledProcessError as e:
-            prompt = get_prompt()
-            err_output = e.output.strip()
-            # Also remove duplicate prompt from error output start, if present
-            if err_output.startswith(prompt):
-                err_output = err_output[len(prompt):].lstrip("\r\n")
-            full_output = f"{prompt}\n{err_output}"
-        except FileNotFoundError as e:
-            prompt = get_prompt()
-            full_output = f"{prompt}\n{str(e)}"
+                # Send the prompt and output
+                full_output = f"{prompt}\n{output}"
+                conn.sendall(full_output.encode())
 
-        s.sendall(full_output.encode())
+            except subprocess.CalledProcessError as e:
+                prompt = get_prompt()
+                err_output = e.output.strip()
+                # Also remove duplicate prompt from error output start, if present
+                if err_output.startswith(prompt):
+                    err_output = err_output[len(prompt):].lstrip("\r\n")
+                full_output = f"{prompt}\n{err_output}"
+                conn.sendall(full_output.encode())
+            except FileNotFoundError as e:
+                prompt = get_prompt()
+                full_output = f"{prompt}\n{str(e)}"
+                conn.sendall(full_output.encode())
