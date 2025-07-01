@@ -21,9 +21,27 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             conn.sendall(command.encode())
 
             result = conn.recv(4096).decode()
-            print(result)
 
-            # Extract new prompt from the result
-            first_line = result.splitlines()[0] if result else ""
-            if ">" in first_line:
-                prompt = first_line.split(">")[0] + "> "
+            # Split lines
+            lines = result.splitlines()
+
+            # Extract prompt line and rest of output
+            if lines:
+                prompt_line = lines[0]
+                output_lines = lines[1:]
+            else:
+                prompt_line = ""
+                output_lines = []
+
+            # Remove duplicate echoed command if present
+            if output_lines and output_lines[0].strip().lower() == command.strip().lower():
+                output_lines = output_lines[1:]
+
+            # Reassemble output without duplicate command echo
+            output = "\n".join(output_lines)
+
+            print(f"{prompt_line}\n{output}")
+
+            # Update prompt to new prompt line (up to '> ')
+            if ">" in prompt_line:
+                prompt = prompt_line.split(">")[0] + "> "
