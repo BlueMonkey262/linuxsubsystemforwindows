@@ -49,7 +49,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             # Run command in tracked directory
             if mode == "ps":
                 output = subprocess.check_output(
-                    ["powershell.exe", "-NoProfile", "-Command", command],
+                    ["powershell.exe", "-NoProfile", "-Command", f"& {{ {command} }}"],
                     stderr=subprocess.STDOUT,
                     text=True,
                     cwd=cwd
