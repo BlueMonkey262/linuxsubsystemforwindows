@@ -1,4 +1,3 @@
-# host_controller.py
 import socket
 
 HOST = '0.0.0.0'   # Listen on all interfaces
