@@ -4,7 +4,7 @@ import subprocess
 HOST = '192.168.50.39'
 PORT = 9999
 
-mode = "cmd"
+mode = "ps"
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
