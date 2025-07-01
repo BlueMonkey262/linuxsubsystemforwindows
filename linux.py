@@ -1,7 +1,10 @@
 import socket
+import subprocess
 
 HOST = '192.168.122.218'  # IP address of the Windows machine
 PORT = 9999
+
+
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.connect((HOST, PORT))
