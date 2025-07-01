@@ -40,7 +40,9 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             # Reassemble output without duplicate command echo
             output = "\n".join(output_lines)
 
-            print(f"{prompt_line}\n{output}")
+            # Modified: Only print the output, not the prompt line again
+            if output:
+                print(output)
 
             # Update prompt to new prompt line (up to '> ')
             if ">" in prompt_line:
