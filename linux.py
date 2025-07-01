@@ -23,7 +23,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             result = conn.recv(4096).decode()
             print(result)
 
-            # Try to extract new prompt from response
+            # Extract new prompt from the result
             first_line = result.splitlines()[0] if result else ""
             if ">" in first_line:
                 prompt = first_line.split(">")[0] + "> "
