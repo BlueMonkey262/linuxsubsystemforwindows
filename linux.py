@@ -14,10 +14,11 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         print(f"Connected by {addr}")
 
         while True:
-            command = input("Command to run on Windows: ")
+            command = input("LSW:")
+
             if not command:
                 break
             conn.sendall(command.encode())
 
             result = conn.recv(4096).decode()
-            print(f"[Windows replied]:\n{result}")
+            print(result)
